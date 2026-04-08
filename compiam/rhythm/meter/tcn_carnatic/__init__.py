@@ -72,8 +72,7 @@ class TCNTracker(object):
             self.load_model(self.model_path)
         self.pad_frames = 2
 
-        self.post_processor = joint_tracker if post_processor == "joint" else \
-                              sequential_tracker
+        self.post_processor = joint_tracker if post_processor == "joint" else sequential_tracker
 
 
     def _build_model(self):
@@ -173,7 +172,7 @@ class TCNTracker(object):
         return x_final
 
     @staticmethod
-    def save_pitch(data, output_path):
+    def save_beats(data, output_path):
         """Calling the write_csv function in compiam.io to write the output beat track in a file
 
         :param data: the data to write
