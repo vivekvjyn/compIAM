@@ -136,8 +136,8 @@ models_dict = {
                     "rhythm",
                     "beat-this-carnatic"
                 ),
-                "download_link": "https://zenodo.org/records/18449067/files/compIAM-TCNCarnatic.zip?download=1",
-                "download_checksum": "995369933f2a344af0ffa57ea5c15e62",
+                "download_link": "https://zenodo.org/records/22856741/files/compIAM-BeatThisCarnatic.zip?download=1",
+                "download_checksum": "b09444d71a6b3c0b2eb8f2c0c562b55f",
             },
         },
     },

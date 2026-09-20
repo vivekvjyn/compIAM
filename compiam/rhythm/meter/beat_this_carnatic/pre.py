@@ -1,30 +1,10 @@
-import numpy as np
 import torch
 import torchaudio
 
 
-def load_audio(path, dtype="float64"):
-    try:
-        waveform, samplerate = torchaudio.load(path, channels_first=False)
-        waveform = np.asanyarray(waveform.squeeze().numpy(), dtype=dtype)
-        return waveform, samplerate
-    except Exception:
-        # in case torchaudio fails, try soundfile
-        try:
-            import soundfile as sf
+class PreProcessor(torch.nn.Module):
+    """Log-mel spectrogram used as input of the beat tracker."""
 
-            return sf.read(path, dtype=dtype)
-        except Exception:
-            # some files are not readable by soundfile, try madmom
-            try:
-                import madmom
-
-                return madmom.io.load_audio_file(str(path), dtype=dtype)
-            except Exception:
-                raise RuntimeError(f'Could not load audio from "{path}".')
-
-
-class LogMelSpect(torch.nn.Module):
     def __init__(
         self,
         sample_rate=22050,
@@ -37,8 +17,20 @@ class LogMelSpect(torch.nn.Module):
         normalized="frame_length",
         power=1,
         log_multiplier=1000,
-        device="cpu",
     ):
+        """Pre-processor init method.
+
+        :param sample_rate: sampling rate of the signals to process (in Hz).
+        :param n_fft: size of the FFT (in samples).
+        :param hop_length: hop size between frames (in samples).
+        :param f_min: minimum frequency of the mel bands (in Hz).
+        :param f_max: maximum frequency of the mel bands (in Hz).
+        :param n_mels: number of mel bands.
+        :param mel_scale: scale of the mel bands.
+        :param normalized: normalisation of the STFT.
+        :param power: exponent of the magnitude spectrogram.
+        :param log_multiplier: magnitudes are multiplied by this value before the log(1 + x) compression.
+        """
         super().__init__()
         self.spect_class = torchaudio.transforms.MelSpectrogram(
             sample_rate=sample_rate,
@@ -50,10 +42,15 @@ class LogMelSpect(torch.nn.Module):
             mel_scale=mel_scale,
             normalized=normalized,
             power=power,
-        ).to(device)
+        )
         self.log_multiplier = log_multiplier
 
     def forward(self, x):
-        """Input is a waveform as a monodimensional array of shape T,
-        output is a 2D log mel spectrogram of shape (F,128)."""
+        """Compute the features of a mono signal.
+
+        :param x: 1-D array or tensor with the audio signal, sampled at `sample_rate`.
+
+        :returns: tensor of shape (frames, n_mels) with the features.
+        """
+        x = torch.as_tensor(x, dtype=torch.float32)
         return torch.log1p(self.log_multiplier * self.spect_class(x).T)

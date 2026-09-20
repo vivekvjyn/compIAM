@@ -1,43 +1,34 @@
+import numpy as np
 import torch
 import torch.nn.functional as F
-import numpy as np
 
-def zeropad(spect: torch.Tensor, left: int = 0, right: int = 0):
-    """
-    Pads a tensor spectrogram matrix of shape (time x bins) with `left` frames in the beginning and `right` frames in the end.
-    """
+
+def zeropad(spect, left=0, right=0):
+    """Pad a spectrogram of shape (time, bins) with `left` frames at the start and `right` at the end."""
     if left == 0 and right == 0:
         return spect
-    else:
-        return F.pad(spect, (0, 0, left, right), "constant", 0)
+    return F.pad(spect, (0, 0, left, right), "constant", 0)
 
-def split_piece(
-    spect: torch.Tensor,
-    chunk_size: int,
-    border_size: int = 6,
-    avoid_short_end: bool = True,
-):
-    """
-    Split a tensor spectrogram matrix of shape (time x bins) into time chunks of `chunk_size` and return the chunks and starting positions.
-    The `border_size` is the number of frames assumed to be discarded in the predictions on either side (since the model was not trained on the input edges due to the max-pool in the loss).
-    To cater for this, the first and last chunk are padded by `border_size` on the beginning and end, respectively, and consecutive chunks overlap by `border_size`.
-    If `avoid_short_end` is true, the last chunk start is shifted left to ends at the end of the piece, therefore the last chunk can potentially overlap with previous chunks more than border_size, otherwise it will be a shorter segment.
-    If the piece is shorter than `chunk_size`, avoid_short_end is ignored and the piece is returned as a single shorter chunk.
 
-    Args:
-        spect (torch.Tensor): The input spectrogram tensor of shape (time x bins).
-        chunk_size (int): The size of the chunks to produce.
-        border_size (int, optional): The size of the border to overlap between chunks. Defaults to 6.
-        avoid_short_end (bool, optional): If True, the last chunk is shifted left to end at the end of the piece. Defaults to True.
+def split_spectrogram(spect, chunk_size, border_size=6):
+    """Split a spectrogram of shape (time, bins) into overlapping chunks.
+
+    The model was not trained on the edges of its input, hence the predictions of the first and
+    last `border_size` frames of every chunk are discarded. To compensate for that, consecutive
+    chunks overlap by `border_size` frames, and the first and last chunks are padded. The last
+    chunk is shifted to end exactly at the end of the piece, unless the piece is shorter than a chunk.
+
+    :param spect: spectrogram tensor of shape (time, bins).
+    :param chunk_size: number of frames of the chunks.
+    :param border_size: number of frames discarded at each side of the predictions of a chunk.
+
+    :returns: tuple with the list of chunks and the array of their starting frames.
     """
-    # generate the start and end indices
     starts = np.arange(
         -border_size, len(spect) - border_size, chunk_size - 2 * border_size
     )
-    if avoid_short_end and len(spect) > chunk_size - 2 * border_size:
-        # if we avoid short ends, move the last index to the end of the piece - (chunk_size - border_size)
+    if len(spect) > chunk_size - 2 * border_size:
         starts[-1] = len(spect) - (chunk_size - border_size)
-    # generate the chunks
     chunks = [
         zeropad(
             spect[max(start, 0) : min(start + chunk_size, len(spect))],
@@ -48,96 +39,24 @@ def split_piece(
     ]
     return chunks, starts
 
-def aggregate_prediction(
-    pred_chunks: list,
-    starts: list,
-    full_size: int,
-    chunk_size: int,
-    border_size: int,
-    overlap_mode: str,
-    device: str | torch.device,
-) -> tuple[torch.Tensor, torch.Tensor]:
+
+def merge_chunks(predictions, starts, length, chunk_size, border_size=6):
+    """Merge the framewise predictions of the chunks of a piece.
+
+    In the frames predicted by several chunks, the earliest chunk takes precedence.
+
+    :param predictions: list of tensors with the predictions of each chunk.
+    :param starts: starting frames of the chunks.
+    :param length: number of frames of the whole piece.
+    :param chunk_size: number of frames of the chunks.
+    :param border_size: number of frames discarded at each side of the predictions of a chunk.
+
+    :returns: tensor with the predictions for the whole piece.
     """
-    Aggregates the predictions for the whole piece based on the given prediction chunks.
-
-    Args:
-        pred_chunks (list): List of prediction chunks, where each chunk is a dictionary containing 'beat' and 'downbeat' predictions.
-        starts (list): List of start positions for each prediction chunk.
-        full_size (int): Size of the full piece.
-        chunk_size (int): Size of each prediction chunk.
-        border_size (int): Size of the border to be discarded from each prediction chunk.
-        overlap_mode (str): Mode for handling overlapping predictions. Can be 'keep_first' or 'keep_last'.
-        device (torch.device): Device to be used for the predictions.
-
-    Returns:
-        tuple: A tuple containing the aggregated beat predictions and downbeat predictions as torch tensors for the whole piece.
-    """
-    if border_size > 0:
-        # cut the predictions to discard the border
-        pred_chunks = [
-            {
-                "beat": pchunk["beat"][border_size:-border_size],
-                "downbeat": pchunk["downbeat"][border_size:-border_size],
-            }
-            for pchunk in pred_chunks
-        ]
-    # aggregate the predictions for the whole piece
-    piece_prediction_beat = torch.full((full_size,), -1000.0, device=device)
-    piece_prediction_downbeat = torch.full((full_size,), -1000.0, device=device)
-    if overlap_mode == "keep_first":
-        # process in reverse order, so predictions of earlier excerpts overwrite later ones
-        pred_chunks = reversed(list(pred_chunks))
-        starts = reversed(list(starts))
-    for start, pchunk in zip(starts, pred_chunks):
-        piece_prediction_beat[
-            start + border_size : start + chunk_size - border_size
-        ] = pchunk["beat"]
-        piece_prediction_downbeat[
-            start + border_size : start + chunk_size - border_size
-        ] = pchunk["downbeat"]
-    return piece_prediction_beat, piece_prediction_downbeat
-
-
-def split_predict_aggregate(
-    spect: torch.Tensor,
-    chunk_size: int,
-    border_size: int,
-    overlap_mode: str,
-    model: torch.nn.Module,
-) -> dict:
-    """
-    Function for pieces that are longer than the training length of the model.
-    Split the input piece into chunks, run the model on them, and aggregate the predictions.
-    The spect is supposed to be a torch tensor of shape (time x bins), i.e., unbatched, and the output is also unbatched.
-
-    Args:
-        spect (torch.Tensor): the input piece
-        chunk_size (int): the length of the chunks
-        border_size (int): the size of the border that is discarded from the predictions
-        overlap_mode (str): how to handle overlaps between chunks
-        model (torch.nn.Module): the model to run
-
-    Returns:
-        dict: the model framewise predictions for the hole piece as a dictionary containing 'beat' and 'downbeat' predictions.
-    """
-    # split the piece into chunks
-    chunks, starts = split_piece(
-        spect, chunk_size, border_size=border_size, avoid_short_end=True
-    )
-    # run the model
-    pred_chunks = [model(chunk.unsqueeze(0)) for chunk in chunks]
-    # remove the extra dimension in beat and downbeat prediction due to batch size 1
-    pred_chunks = [
-        {"beat": p["beat"][0], "downbeat": p["downbeat"][0]} for p in pred_chunks
-    ]
-    piece_prediction_beat, piece_prediction_downbeat = aggregate_prediction(
-        pred_chunks,
-        starts,
-        spect.shape[0],
-        chunk_size,
-        border_size,
-        overlap_mode,
-        spect.device,
-    )
-    # save it to model_prediction
-    return {"beat": piece_prediction_beat, "downbeat": piece_prediction_downbeat}
+    merged = torch.full((length,), -1000.0, device=predictions[0].device)
+    # later chunks are written first, so that earlier ones overwrite them
+    for start, prediction in zip(reversed(starts), reversed(predictions)):
+        if border_size > 0:
+            prediction = prediction[border_size:-border_size]
+        merged[start + border_size : start + chunk_size - border_size] = prediction
+    return merged

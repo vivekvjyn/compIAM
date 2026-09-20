@@ -2,6 +2,8 @@
 Model definitions for the Beat This! beat tracker.
 """
 
+from __future__ import annotations
+
 from collections import OrderedDict
 
 import torch
@@ -13,7 +15,7 @@ from torch import nn
 from compiam.rhythm.meter.beat_this_carnatic import roformer
 
 
-class BeatThis(nn.Module):
+class BeatTracker(nn.Module):
     """
     A neural network model for beat tracking. It is composed of three main components:
     - a frontend that processes the input spectrogram,
@@ -196,6 +198,21 @@ class BeatThis(nn.Module):
         x = self.transformer_blocks(x)
         x = self.task_heads(x)
         return x
+
+    def load_weights(self, model_path, device):
+        """Load the model weights.
+
+        :param model_path: path to the file with the weights.
+        :param device: device to load the weights to.
+        """
+        ckpt = torch.load(model_path, map_location=device)
+        state_dict = ckpt.get("state_dict", ckpt)
+        # The weights of the training module contain the model under the "model." prefix
+        state_dict = {
+            k[len("model.") :] if k.startswith("model.") else k: v
+            for k, v in state_dict.items()
+        }
+        self.load_state_dict(state_dict)
 
     def _load_from_state_dict(self, state_dict, prefix, *args, **kwargs):
         # remove _orig_mod prefixes for compiled models
