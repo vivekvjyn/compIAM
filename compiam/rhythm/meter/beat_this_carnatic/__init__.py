@@ -34,9 +34,9 @@ class BeatThisCarnatic(object):
         try:
             global torch
             import torch
-            import torchaudio
-            import einops
-            import rotary_embedding_torch
+            import torchaudio  # noqa: F401
+            import einops  # noqa: F401
+            import rotary_embedding_torch  # noqa: F401
         except ImportError:
             raise ImportError(
                 "Torch is required to use BeatThisCarnatic. "

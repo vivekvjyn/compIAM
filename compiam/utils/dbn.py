@@ -19,10 +19,6 @@ import warnings
 import numpy as np
 from scipy.sparse import csr_matrix
 
-from compiam.utils import get_logger
-
-logger = get_logger(__name__)
-
 
 class BeatStateSpace:
     """State space of a single beat period, for a range of tempi (beat intervals in frames)."""
