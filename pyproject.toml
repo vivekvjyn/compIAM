@@ -70,6 +70,8 @@ tensorflow = [
 torch = [
     "torch==2.0.0",
     "torchaudio==2.0.1",
+    "einops>=0.7.0",
+    "rotary-embedding-torch==0.6.4",
 ]
 essentia = [
     "essentia",

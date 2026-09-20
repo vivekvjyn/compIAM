@@ -125,6 +125,38 @@ models_dict = {
             },
         },
     },
+    "rhythm:beat-this-carnatic": {
+        "module_name": "compiam.rhythm.meter.beat_this_carnatic",
+        "class_name": "BeatThisCarnatic",
+        "default_version": "v1",
+        "kwargs": {
+            "v1": {
+                "model_path": os.path.join(
+                    "models",
+                    "rhythm",
+                    "beat-this-carnatic"
+                ),
+                "download_link": "https://zenodo.org/records/22856741/files/compIAM-BeatThisCarnatic.zip?download=1",
+                "download_checksum": "b09444d71a6b3c0b2eb8f2c0c562b55f",
+            },
+        },
+    },
+    "rhythm:tcn-carnatic": {
+        "module_name": "compiam.rhythm.meter.tcn_carnatic",
+        "class_name": "TCNTracker",
+        "default_version": "v1",
+        "kwargs": {
+            "v1": {
+                "model_path": os.path.join(
+                    "models",
+                    "rhythm",
+                    "tcn-carnatic"
+                ),
+                "download_link": "https://zenodo.org/records/18449067/files/compIAM-TCNCarnatic.zip?download=1",
+                "download_checksum": "995369933f2a344af0ffa57ea5c15e62",
+            },
+        },
+    },
     "structure:dhrupad-bandish-segmentation": {
         "module_name": "compiam.structure.segmentation.dhrupad_bandish_segmentation",
         "class_name": "DhrupadBandishSegmentation",
