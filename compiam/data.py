@@ -137,7 +137,7 @@ models_dict = {
                     "beat-this-carnatic"
                 ),
                 "download_link": "https://zenodo.org/records/22856741/files/compIAM-BeatThisCarnatic.zip?download=1",
-                "download_checksum": "b09444d71a6b3c0b2eb8f2c0c562b55f",
+                "download_checksum": "9092da83307f1b0f62a7a85c8e87cf55",
             },
         },
     },
